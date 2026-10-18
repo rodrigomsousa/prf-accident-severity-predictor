@@ -91,7 +91,7 @@ Sem o relato da ocorrência (tipo de acidente, veículos, pessoas), o desempenho
 
 ### 1. Clonar o Repositório
 ```bash
-git clone https://github.com/seu-usuario/prf-accident-severity-predictor.git
+git clone https://github.com/rodrigomsousa/prf-accident-severity-predictor.git
 cd prf-accident-severity-predictor
 ```
 
