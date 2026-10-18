@@ -1,0 +1,42 @@
+# CLAUDE.md
+
+Contexto para assistentes de IA trabalhando neste repositório.
+
+## Sobre o projeto
+
+Projeto de estudo e portfólio em Data Science. O autor é programador experiente, mas iniciante em DS: **explique os conceitos de DS** (métricas, leakage, validação, escolha de modelos) de forma didática junto com o código. Idioma: português.
+
+**Escopo principal:** modelo de triagem para o 191 da PRF, que estima no momento da ligação a probabilidade de o acidente ter vítimas graves ou fatais, para apoiar o despacho de resgate avançado. A abordagem preventiva (só variáveis pré-evento) é um **experimento comparativo** no notebook, não o modelo principal.
+
+## Decisões já tomadas (não revisitar sem motivo)
+
+- **Alvo binário** `grave` = ao menos um morto ou ferido grave (~28%). Multiclasse pode ser considerada no futuro.
+- **Validação temporal:** treino 2024 + 2025, teste 2026 (ano parcial, até agosto). Nunca usar split aleatório.
+- **Leakage:** as colunas de desfecho em `LEAKAGE_COLS` nunca entram como features. `causa_acidente` também fica fora da triagem, porque só é definida na investigação.
+- **Conjuntos de features** em `src/data_preprocessing.py`: `TRIAGE` (contexto + `tipo_acidente`, `veiculos`, `pessoas`) e `PREVENTIVE` (só contexto).
+- Métricas principais: **ROC-AUC e PR-AUC** (a base é desbalanceada e a acurácia engana). Sempre comparar com o baseline no mesmo split e relatar números reais.
+
+## Estado atual e próximos passos
+
+Baseline: Logistic Regression com `class_weight="balanced"`: ROC-AUC 0.709 / PR-AUC 0.517 (triagem); 0.624 / 0.387 (preventivo).
+
+Próximos passos, em ordem:
+1. Random Forest e XGBoost para a triagem.
+2. Ajuste do limiar de decisão priorizando recall (deixar de enviar resgate a um acidente grave custa mais caro).
+3. Features geográficas (município, coordenadas, histórico do trecho).
+4. Atualizar as tabelas do `readme.md` e o notebook com os novos resultados.
+
+## Comandos
+
+```bash
+venv/Scripts/python src/train.py                    # treina, avalia e salva models/logistic_regression.joblib
+cd notebooks && ../venv/Scripts/jupyter nbconvert --to notebook --execute --inplace 01_eda_and_modeling.ipynb
+```
+
+- Dados em `data/raw/datatran{ano}.csv` (separador `;`, encoding `latin1`, decimal `,`), ignorados pelo git.
+- Python 3.14, pandas 3, scikit-learn 1.9 (ex.: `RocCurveDisplay` usa `curve_kwargs`, não `color=`).
+
+## Convenções
+
+- **Notebook:** editar o `.ipynb` diretamente. O nbconvert grava timestamps em `metadata.execution` de cada célula, e o VS Code os remove ao abrir. **Limpe esses metadados antes de commitar** para não gerar diffs espúrios.
+- Commits em português. A branch padrão é `main`.
