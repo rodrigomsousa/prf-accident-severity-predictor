@@ -70,9 +70,15 @@ Teste em **2026** (48.712 acidentes, 28% graves):
 | Modelo | Acurácia | Precision | Recall | F1-Score | ROC-AUC | PR-AUC |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
 | Baseline (Dummy, sempre "leve") | 0.720 | 0.000 | 0.000 | 0.000 | 0.500 | 0.280 |
-| **Triagem: Logistic Regression** | 0.683 | 0.449 | 0.573 | 0.504 | **0.709** | **0.517** |
+| Triagem: Logistic Regression | 0.683 | 0.449 | 0.573 | 0.504 | 0.709 | 0.517 |
+| Triagem: Random Forest | 0.721 | 0.502 | 0.479 | 0.490 | 0.714 | 0.527 |
+| **Triagem: XGBoost** | 0.689 | 0.457 | 0.582 | 0.512 | **0.718** | **0.534** |
+
+Os três algoritmos ficam muito próximos (ROC-AUC entre 0.71 e 0.72), o que indica que o limite está nas features e não no algoritmo. Precision, recall e F1 usam o limiar padrão de 0.5, ainda não otimizado.
 
 ### Experimento: abordagem preventiva (só variáveis pré-evento)
+
+Avaliado com a Regressão Logística:
 
 | Modelo | ROC-AUC | PR-AUC |
 | :--- | :---: | :---: |
@@ -83,7 +89,7 @@ Sem o relato da ocorrência (tipo de acidente, veículos, pessoas), o desempenho
 
 > A acurácia do Dummy (72%) é maior que a do modelo porque a base é desbalanceada. Por isso as métricas principais são **ROC-AUC** e **PR-AUC**.
 
-**Próximos passos:** Random Forest e XGBoost, ajuste do limiar de decisão para priorizar recall, novas features geográficas.
+**Próximos passos:** ajuste do limiar de decisão para priorizar recall, novas features geográficas.
 
 ---
 

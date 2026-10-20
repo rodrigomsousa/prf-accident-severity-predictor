@@ -14,6 +14,7 @@ import pandas as pd
 from sklearn.base import ClassifierMixin
 from sklearn.compose import ColumnTransformer
 from sklearn.dummy import DummyClassifier
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     accuracy_score,
@@ -26,6 +27,7 @@ from sklearn.metrics import (
 )
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from xgboost import XGBClassifier
 
 from data_preprocessing import TRIAGE, FeatureSet, load_dataset
 
@@ -52,6 +54,24 @@ def make_logistic_regression() -> LogisticRegression:
     return LogisticRegression(class_weight="balanced", max_iter=2000)
 
 
+def make_random_forest() -> RandomForestClassifier:
+    # Muitas árvores decorrelacionadas votam juntas. min_samples_leaf evita
+    # folhas minúsculas (overfitting); balanced_subsample reequilibra as classes
+    # em cada árvore.
+    return RandomForestClassifier(
+        n_estimators=300, min_samples_leaf=5, class_weight="balanced_subsample",
+        n_jobs=-1, random_state=42)
+
+
+def make_xgboost(y_train: pd.Series) -> XGBClassifier:
+    # Árvores em sequência, cada uma corrigindo o erro das anteriores.
+    # scale_pos_weight = negativos/positivos faz o papel do class_weight.
+    return XGBClassifier(
+        n_estimators=400, learning_rate=0.05, max_depth=5, subsample=0.8,
+        colsample_bytree=0.8, scale_pos_weight=(y_train == 0).sum() / (y_train == 1).sum(),
+        eval_metric="logloss", n_jobs=-1, random_state=42)
+
+
 def evaluate(model: Pipeline, X: pd.DataFrame, y: pd.Series) -> dict[str, float]:
     y_pred = model.predict(X)
     y_proba = model.predict_proba(X)[:, 1]
@@ -76,6 +96,8 @@ def main() -> None:
         "Dummy (classe majoritária)": make_pipeline(
             TRIAGE, DummyClassifier(strategy="most_frequent")),
         "Logistic Regression": make_pipeline(TRIAGE, make_logistic_regression()),
+        "Random Forest": make_pipeline(TRIAGE, make_random_forest()),
+        "XGBoost": make_pipeline(TRIAGE, make_xgboost(y_train)),
     }
     results = {}
     for name, model in models.items():
@@ -85,7 +107,9 @@ def main() -> None:
         print(confusion_matrix(y_test, model.predict(X_test)), "\n")
 
     MODELS_DIR.mkdir(exist_ok=True)
-    joblib.dump(models["Logistic Regression"], MODELS_DIR / "logistic_regression.joblib")
+    for name in ["Logistic Regression", "Random Forest", "XGBoost"]:
+        filename = name.lower().replace(" ", "_") + ".joblib"
+        joblib.dump(models[name], MODELS_DIR / filename)
 
     print(pd.DataFrame(results).T.round(3).to_string())
 

@@ -18,18 +18,17 @@ Projeto de estudo e portfólio em Data Science. O autor é programador experient
 
 ## Estado atual e próximos passos
 
-Baseline: Logistic Regression com `class_weight="balanced"`: ROC-AUC 0.709 / PR-AUC 0.517 (triagem); 0.624 / 0.387 (preventivo).
+Resultados da triagem no teste 2026 (ROC-AUC / PR-AUC): Logistic Regression (`class_weight="balanced"`) 0.709 / 0.517; Random Forest 0.714 / 0.527; **XGBoost 0.718 / 0.534** (melhor, por pouco). Preventivo (Logistic Regression): 0.624 / 0.387. Os modelos de árvore quase não superam o linear, então o gargalo são as features, não o algoritmo. Recall/precision acima usam o limiar padrão 0.5, ainda não ajustado.
 
 Próximos passos, em ordem:
-1. Random Forest e XGBoost para a triagem.
-2. Ajuste do limiar de decisão priorizando recall (deixar de enviar resgate a um acidente grave custa mais caro).
-3. Features geográficas (município, coordenadas, histórico do trecho).
-4. Atualizar as tabelas do `readme.md` e o notebook com os novos resultados.
+1. Ajuste do limiar de decisão priorizando recall (deixar de enviar resgate a um acidente grave custa mais caro), provavelmente sobre o XGBoost.
+2. Features geográficas (município, coordenadas, histórico do trecho).
+3. Atualizar as tabelas do `readme.md` e o notebook com os novos resultados.
 
 ## Comandos
 
 ```bash
-venv/Scripts/python src/train.py                    # treina, avalia e salva models/logistic_regression.joblib
+venv/Scripts/python src/train.py                    # treina, avalia e salva models/{logistic_regression,random_forest,xgboost}.joblib
 cd notebooks && ../venv/Scripts/jupyter nbconvert --to notebook --execute --inplace 01_eda_and_modeling.ipynb
 ```
 
