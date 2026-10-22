@@ -24,9 +24,10 @@ Features geográficas: ganho real mas pequeno (XGBoost +0.005 de PR-AUC, IC 95% 
 
 Limiar ajustado (`src/threshold.py`): escolhido sem tocar no teste (ajusta em 2024, escolhe em 2025 o maior limiar com recall >= 80%), resultou em 0.389. No teste 2026 o XGBoost fica com recall 0.825, precision 0.360 e aciona resgate em 64.2% das ligações (contra 0.592 / 0.454 / 36.5% com 0.5). O custo alto confirma que faltam features discriminativas.
 
-Próximos passos, em ordem:
-1. Atualizar as tabelas do `readme.md` e o notebook com os novos resultados (features geográficas e limiar). No notebook, o `FeatureSet` `with_cause` precisa receber `target_encoded`.
-2. Features de veículos/pessoas envolvidas (ex.: moto, pedestre), dos dados da PRF por pessoa/veículo, como aproximação do que o 191 pode perguntar na ligação.
+README e notebook estão atualizados com esses resultados (o notebook tem as seções 4.2, features geográficas com bootstrap, e 4.3, limiar).
+
+Próximo passo:
+1. Features de veículos/pessoas envolvidas (ex.: moto, pedestre), dos dados da PRF por pessoa/veículo, como aproximação do que o 191 pode perguntar na ligação.
 
 ## Comandos
 
