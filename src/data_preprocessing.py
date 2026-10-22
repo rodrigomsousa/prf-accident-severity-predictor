@@ -1,6 +1,6 @@
 """Carregamento, limpeza e engenharia de features dos dados da PRF (datatran)."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pandas as pd
@@ -33,18 +33,22 @@ class FeatureSet:
     categorical: list[str]
     numeric: list[str]
     binary: list[str]
+    # Categóricas com milhares de valores: viram a taxa histórica de graves
+    # de cada categoria (target encoding) em vez de one-hot.
+    target_encoded: list[str] = field(default_factory=list)
 
     @property
     def columns(self) -> list[str]:
-        return self.categorical + self.numeric + self.binary
+        return self.categorical + self.numeric + self.binary + self.target_encoded
 
 
 # Contexto conhecido *antes* do acidente: local, tempo, clima e via.
 PREVENTIVE = FeatureSet(
     categorical=["uf", "br", "dia_semana", "hora", "mes", "fase_dia", "sentido_via",
                  "condicao_metereologica", "tipo_pista", "uso_solo"],
-    numeric=["km"],
+    numeric=["km", "latitude", "longitude"],
     binary=[f"tracado_{t}" for t in TRACADO_TOKENS],
+    target_encoded=["municipio", "trecho"],
 )
 
 # Triagem no 191: contexto + o que o solicitante informa na ligação
@@ -54,6 +58,7 @@ TRIAGE = FeatureSet(
     categorical=PREVENTIVE.categorical + ["tipo_acidente"],
     numeric=PREVENTIVE.numeric + ["veiculos", "pessoas"],
     binary=PREVENTIVE.binary,
+    target_encoded=PREVENTIVE.target_encoded,
 )
 
 
@@ -92,8 +97,14 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
                 "tipo_acidente", "causa_acidente"]:
         out[col] = df[col].astype(str)
 
-    for col in ["km", "veiculos", "pessoas"]:
+    for col in ["km", "veiculos", "pessoas", "latitude", "longitude"]:
         out[col] = df[col]
+
+    # Prefixo da UF: há municípios homônimos em estados diferentes.
+    out["municipio"] = df["uf"] + "_" + df["municipio"]
+    # Trecho de 10 km da rodovia, ex.: "116_SP_23" = BR-116 em SP, km 230 a 239.
+    out["trecho"] = (df["br"].astype(str) + "_" + df["uf"] + "_"
+                     + (df["km"] // 10).astype(int).astype(str))
 
     # "Reta;Declive" -> tracado_Reta=1, tracado_Declive=1
     tracado = df["tracado_via"].fillna("").str.split(";")

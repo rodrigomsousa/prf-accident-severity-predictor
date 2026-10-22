@@ -26,7 +26,8 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.model_selection import KFold
+from sklearn.preprocessing import OneHotEncoder, StandardScaler, TargetEncoder
 from xgboost import XGBClassifier
 
 from data_preprocessing import TRIAGE, FeatureSet, load_dataset
@@ -44,6 +45,12 @@ def make_pipeline(features: FeatureSet, estimator: ClassifierMixin) -> Pipeline:
          features.categorical),
         ("num", StandardScaler(), features.numeric),
         ("bin", "passthrough", features.binary),
+        # Troca cada categoria pela taxa de graves nela. No fit, cada linha é
+        # codificada com médias dos outros folds (cross-fitting), senão o
+        # próprio alvo da linha vazaria para a feature. Categorias raras são
+        # puxadas para a média global (smoothing).
+        ("te", TargetEncoder(cv=KFold(5, shuffle=True, random_state=42)),
+         features.target_encoded),
     ])
     return Pipeline([("prep", preprocessor), ("model", estimator)])
 
