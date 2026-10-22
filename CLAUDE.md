@@ -18,17 +18,19 @@ Projeto de estudo e portfólio em Data Science. O autor é programador experient
 
 ## Estado atual e próximos passos
 
-Resultados da triagem no teste 2026 (ROC-AUC / PR-AUC): Logistic Regression (`class_weight="balanced"`) 0.709 / 0.517; Random Forest 0.714 / 0.527; **XGBoost 0.718 / 0.534** (melhor, por pouco). Preventivo (Logistic Regression): 0.624 / 0.387. Os modelos de árvore quase não superam o linear, então o gargalo são as features, não o algoritmo. Recall/precision acima usam o limiar padrão 0.5, ainda não ajustado.
+Resultados da triagem no teste 2026 (ROC-AUC / PR-AUC): Logistic Regression (`class_weight="balanced"`) 0.709 / 0.517; Random Forest 0.714 / 0.527; **XGBoost 0.718 / 0.534** (melhor, por pouco). Preventivo (Logistic Regression): 0.624 / 0.387. Os modelos de árvore quase não superam o linear, então o gargalo são as features, não o algoritmo. Recall/precision em `train.py` usam o limiar padrão 0.5.
+
+Limiar ajustado (`src/threshold.py`): escolhido sem tocar no teste (ajusta em 2024, escolhe em 2025 o maior limiar com recall >= 80%), resultou em 0.391. No teste 2026 o XGBoost fica com recall 0.824, precision 0.357 e aciona resgate em 64.7% das ligações (contra 0.582 / 0.457 / 35.7% com 0.5). O custo alto confirma que faltam features discriminativas.
 
 Próximos passos, em ordem:
-1. Ajuste do limiar de decisão priorizando recall (deixar de enviar resgate a um acidente grave custa mais caro), provavelmente sobre o XGBoost.
-2. Features geográficas (município, coordenadas, histórico do trecho).
-3. Atualizar as tabelas do `readme.md` e o notebook com os novos resultados.
+1. Features geográficas (município, coordenadas, histórico do trecho).
+2. Atualizar as tabelas do `readme.md` e o notebook com os novos resultados (incluindo o limiar).
 
 ## Comandos
 
 ```bash
 venv/Scripts/python src/train.py                    # treina, avalia e salva models/{logistic_regression,random_forest,xgboost}.joblib
+venv/Scripts/python src/threshold.py                # escolhe o limiar do XGBoost (validação 2025) e salva models/xgboost_threshold.json
 cd notebooks && ../venv/Scripts/jupyter nbconvert --to notebook --execute --inplace 01_eda_and_modeling.ipynb
 ```
 
