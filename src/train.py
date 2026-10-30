@@ -10,6 +10,7 @@ Uso:
 from pathlib import Path
 
 import joblib
+import numpy as np
 import pandas as pd
 from sklearn.base import ClassifierMixin
 from sklearn.compose import ColumnTransformer
@@ -31,10 +32,18 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler, TargetEncoder
 from xgboost import XGBClassifier
 
 from data_preprocessing import TRIAGE, FeatureSet, load_dataset
+from degradation import augment_nan
 
 TRAIN_YEARS = [2024, 2025]
 TEST_YEARS = [2026]
 MODELS_DIR = Path(__file__).resolve().parents[1] / "models"
+# Modelos salvos em models/, por nome no relatório.
+SAVED = {
+    "Logistic Regression": "logistic_regression",
+    "Random Forest": "random_forest",
+    "XGBoost": "xgboost",
+    "XGBoost (aug-nan)": "xgboost_aug_nan",
+}
 
 
 def make_pipeline(features: FeatureSet, estimator: ClassifierMixin) -> Pipeline:
@@ -105,18 +114,22 @@ def main() -> None:
         "Logistic Regression": make_pipeline(TRIAGE, make_logistic_regression()),
         "Random Forest": make_pipeline(TRIAGE, make_random_forest()),
         "XGBoost": make_pipeline(TRIAGE, make_xgboost(y_train)),
+        # Mesmo XGBoost, treinado com relato incompleto simulado: veículos e
+        # pessoas omitidos viram NaN ("não informado"). Avaliado aqui com o
+        # relato completo; a robustez à omissão está em robustness.py/augmentation.py.
+        "XGBoost (aug-nan)": make_pipeline(TRIAGE, make_xgboost(y_train)),
     }
+    X_aug = augment_nan(X_train, np.random.default_rng(0))
     results = {}
     for name, model in models.items():
-        model.fit(X_train, y_train)
+        model.fit(X_aug if name == "XGBoost (aug-nan)" else X_train, y_train)
         results[name] = evaluate(model, X_test, y_test)
         print(f"== {name}")
         print(confusion_matrix(y_test, model.predict(X_test)), "\n")
 
     MODELS_DIR.mkdir(exist_ok=True)
-    for name in ["Logistic Regression", "Random Forest", "XGBoost"]:
-        filename = name.lower().replace(" ", "_") + ".joblib"
-        joblib.dump(models[name], MODELS_DIR / filename)
+    for name, filename in SAVED.items():
+        joblib.dump(models[name], MODELS_DIR / f"{filename}.joblib")
 
     print(pd.DataFrame(results).T.round(3).to_string())
 
