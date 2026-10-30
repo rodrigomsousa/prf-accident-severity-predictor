@@ -50,14 +50,18 @@ O projeto usa **Pipelines do Scikit-Learn** (pré-processamento + modelo em um �
 ```text
 prf-accident-severity-predictor/
 │
-├── data/raw/              # CSVs da PRF: datatran{ano}.csv (ignorado no git)
-├── models/                # Pipelines treinados (.joblib)
+├── data/raw/              # CSVs da PRF: datatran{ano}.csv e pessoas{ano}.csv (ignorado no git)
+├── models/                # Pipelines treinados (.joblib) e limiares (.json)
 ├── notebooks/
-│   └── 01_eda_and_modeling.ipynb   # EDA, modelagem e experimento preventivo
+│   └── 01_eda_and_modeling.ipynb   # EDA, modelagem, robustez e experimento preventivo
 ├── src/
 │   ├── data_preprocessing.py       # Carga, alvo, features e conjuntos de features
 │   ├── train.py                    # Pipeline, treino, avaliação e persistência
-│   └── threshold.py                # Ajuste do limiar de decisão priorizando recall
+│   ├── threshold.py                # Ajuste do limiar de decisão priorizando recall
+│   ├── degradation.py              # Simulação de relato incompleto (omissão de veículos/pessoas)
+│   ├── robustness.py               # Teste de robustez do modelo ao relato incompleto
+│   ├── augmentation.py             # Compara treinar com e sem omissão simulada
+│   └── threshold_nan.py            # Limiar do modelo treinado com omissão
 ├── .gitignore
 ├── readme.md
 └── requirements.txt
@@ -75,14 +79,15 @@ Teste em **2026** (48.712 acidentes, 28% graves):
 | Triagem: Logistic Regression | 0.706 | 0.482 | 0.651 | 0.554 | 0.757 | 0.551 |
 | Triagem: Random Forest | 0.747 | 0.549 | 0.541 | 0.545 | 0.764 | 0.584 |
 | **Triagem: XGBoost** | 0.710 | 0.487 | 0.673 | 0.565 | **0.774** | **0.599** |
+| Triagem: XGBoost treinado com omissão (relato completo no teste) | 0.707 | 0.484 | 0.671 | 0.562 | 0.770 | 0.597 |
 
-Precision, recall e F1 desta tabela usam o limiar padrão de 0.5.
+Precision, recall e F1 desta tabela usam o limiar padrão de 0.5. A última linha é o modelo preparado para relatos incompletos (veja a seção de robustez abaixo): com relato completo, perde só 0.002 de PR-AUC.
 
 **O que mais melhorou o modelo foram as features de veículos e pessoas** (quantas motos, bicicletas, caminhões e ônibus, e se há pedestre), agregadas dos arquivos da PRF por pessoa. Sem elas, os três algoritmos ficavam colados em ROC-AUC ≈ 0.72. O XGBoost foi de 0.721 / 0.539 para 0.774 / 0.599 (ROC-AUC / PR-AUC), com intervalo de 95% do ganho em PR-AUC entre +0.056 e +0.065 (bootstrap pareado no teste). Com isso, as árvores passaram a se separar do modelo linear. Apenas o `estado_fisico` e demais colunas de desfecho dos arquivos por pessoa ficam de fora.
 
 As features geográficas (coordenadas e histórico de município e trecho) trouxeram um ganho menor, mas estatisticamente real: +0.005 de PR-AUC, com intervalo de 95% entre +0.003 e +0.008.
 
-> **Ressalva:** os arquivos por pessoa são o registro final da PRF. O modelo supõe que o atendente consegue saber na ligação se há moto ou pedestre, mas um relato incompleto ou errado reduziria o ganho em produção.
+> **Ressalva:** os arquivos por pessoa são o registro final da PRF. O modelo supõe que o atendente consegue saber na ligação se há moto ou pedestre. A seção de robustez abaixo mede o que acontece quando o relato é incompleto.
 
 ### Ajuste do limiar de decisão
 
@@ -97,6 +102,32 @@ O limiar foi escolhido **sem olhar o teste**: o modelo treina em 2024, o limiar 
 
 O recall de 82% em 2026 mostra que o limiar escolhido em 2025 se manteve. O custo ainda é alto: para pegar 4 de cada 5 acidentes graves, o resgate avançado seria acionado em 57% das ligações (eram 64% antes das features de veículos e pessoas), e cerca de 2 em cada 5 acionamentos são de fato graves (contra 28% se todas as ligações fossem atendidas).
 
+### Robustez ao relato incompleto
+
+Para medir quanto do ganho das features de veículos e pessoas sobrevive quando o solicitante esquece ou não sabe o que há na pista, o teste 2026 foi degradado: com probabilidade *p*, a ligação inteira chega sem o bloco de veículos/pessoas. O modelo é treinado uma vez, com relato completo, e o limiar é o de 0.391.
+
+| Ligações sem o bloco | PR-AUC | Recall | Acionamentos |
+| :--- | :---: | :---: | :---: |
+| 0% | 0.599 | 0.825 | 56.7% |
+| 20% | 0.572 | 0.739 | 49.7% |
+| 50% | 0.539 | 0.614 | 39.3% |
+| 100% | 0.505 | 0.402 | 22.0% |
+
+O ganho encolhe de forma quase linear. Com 50% de omissão a PR-AUC empata com a do modelo sem as features (0.539), e acima disso fica **pior** que ele: o modelo aprendeu que "0 motos, 0 pedestres" significa acidente leve e lê a omissão como ausência. O recall também cai, e a meta de 80% só vale com relato completo.
+
+**A defesa foi treinar já com omissão simulada**: cada acidente do treino recebe uma taxa de omissão própria sorteada entre 0% e 100%, e o bloco omitido vira `NaN` ("não informado"), que o XGBoost trata nativamente. O limiar (0.389) é escolhido com a mesma validação temporal, mas com a validação também degradada.
+
+| Ligações sem o bloco | PR-AUC | Recall | Precision | Acionamentos |
+| :--- | :---: | :---: | :---: | :---: |
+| 0% | 0.597 | 0.832 | 0.401 | 58.1% |
+| 20% | 0.584 | 0.829 | 0.393 | 59.2% |
+| 50% | 0.569 | 0.826 | 0.380 | 61.0% |
+| 100% | 0.536 | 0.821 | 0.361 | 63.8% |
+
+O recall se mantém em cerca de 82% em qualquer nível de omissão, e um limiar único serve (os limiares ótimos por nível ficaram entre 0.388 e 0.394). O preço é operacional: sem o relato de veículos, a precision cai de 0.40 para 0.36 e o acionamento sobe de 58% para 64%.
+
+> **Ressalva:** a omissão é simulada, aleatória e igual no treino e no teste. Em ligações reais ela pode se correlacionar com a gravidade, e só relatos reais permitiriam medir isso.
+
 ### Experimento: abordagem preventiva (só variáveis pré-evento)
 
 Avaliado com a Regressão Logística:
@@ -110,7 +141,7 @@ Sem o relato da ocorrência (tipo de acidente, veículos, pessoas), o desempenho
 
 > A acurácia do Dummy (72%) é maior que a do modelo porque a base é desbalanceada. Por isso as métricas principais são **ROC-AUC** e **PR-AUC**.
 
-**Próximos passos:** simular um relato incompleto ou errado (esconder parte das informações de veículos e pessoas no teste) para medir quanto do ganho sobrevive em produção; e avaliar uma classificação multiclasse (leve, grave, fatal).
+**Próximos passos:** avaliar uma classificação multiclasse (leve, grave, fatal); e validar a hipótese de omissão aleatória com relatos reais das ligações, se houver acesso a eles.
 
 ---
 
@@ -141,6 +172,9 @@ Baixe, para os anos desejados, os arquivos **"Agrupados por ocorrência"** e **"
 ```bash
 python src/train.py
 python src/threshold.py   # escolhe o limiar de decisão do XGBoost
+python src/threshold_nan.py   # limiar do XGBoost treinado com omissão
+python src/robustness.py      # teste de robustez ao relato incompleto
+python src/augmentation.py    # compara treinar com e sem omissão simulada
 ```
 
 ### 6. Executar o Notebook
