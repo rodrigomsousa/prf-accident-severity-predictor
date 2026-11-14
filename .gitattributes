@@ -1,0 +1,2 @@
+# Notebooks sempre com LF, para o diff não variar entre Windows e outros sistemas
+*.ipynb text eol=lf
