@@ -32,9 +32,11 @@ Limiar ajustado (`src/threshold.py`): escolhido sem tocar no teste (ajusta em 20
 
 `XGBoost (aug-nan)` é treinado e salvo por `train.py` (`models/xgboost_aug_nan.joblib`) junto com o XGBoost completo, que continua como comparação. A inferência aceita `NaN` nas colunas de `PEOPLE_COLS` para "não informado". O modelo principal para uso em produção é o `aug-nan`, com limiar de `models/xgboost_nan_threshold.json`.
 
-README e notebook estão atualizados (o notebook tem as seções 4.2 geográficas, 4.3 veículos e pessoas, 4.4 limiar e 4.5 robustez ao relato incompleto).
+**Calibração (feito, `src/calibration.py`):** o XGBoost bruto superestima (prob. média 0.45 contra 0.28 real; ECE 0.171, Brier 0.194). Platt e isotônica aprendidos na validação 2025 degradada levam o ECE a ~0.008 e o Brier a 0.162, sem mexer no ROC-AUC (monotônica), em todos os níveis de omissão. Preferir Platt (a isotônica perde ~0.005 de PR-AUC por empates). O calibrador é ajustado sobre o modelo de 2024 e salvo em `models/xgboost_nan_platt.joblib`; o modelo de produção (2024+2025) ainda não tem calibrador próprio (exigiria reservar período de validação). **Interpretabilidade (feito, `src/explain.py`):** TreeSHAP nativo (`pred_contribs`, sem a lib `shap`) agregado por variável original; top: `n_moto`, `tipo_acidente`, `pessoas`, `n_pesado`, `municipio`; gráfico em `reports/shap_importance.png`.
 
-Próximos passos:
+README está atualizado; o notebook ainda não tem as seções de calibração e SHAP (o notebook tem as seções 4.2 geográficas, 4.3 veículos e pessoas, 4.4 limiar e 4.5 robustez ao relato incompleto).
+
+Próximos passos (calibração e SHAP já feitos):
 1. Multiclasse (leve, grave, fatal), se fizer sentido.
 2. Outras informações que o atendente pode perguntar (veículo preso nas ferragens, carga perigosa), se houver dados que as aproximem.
 3. Validar a hipótese de omissão aleatória com relatos reais das ligações, se houver acesso a eles.
@@ -46,6 +48,8 @@ venv/Scripts/python src/train.py                    # treina, avalia e salva mod
 venv/Scripts/python src/threshold.py                # escolhe o limiar do XGBoost (validação 2025) e salva models/xgboost_threshold.json
 venv/Scripts/python src/threshold_nan.py            # limiar do aug-nan (validação 2025 degradada) em models/xgboost_nan_threshold.json
 venv/Scripts/python src/robustness.py               # curva de degradação do modelo completo (dados em data/robustness_results.csv)
+venv/Scripts/python src/calibration.py              # calibração (Platt/isotônica) do aug-nan
+venv/Scripts/python src/explain.py                  # SHAP do aug-nan (gráfico em reports/)
 venv/Scripts/python src/augmentation.py             # completo vs aug-zero vs aug-nan sob omissão (data/augmentation_results.csv)
 cd notebooks && ../venv/Scripts/jupyter nbconvert --to notebook --execute --inplace 01_eda_and_modeling.ipynb
 ```

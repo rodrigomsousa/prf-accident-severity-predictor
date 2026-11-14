@@ -52,6 +52,7 @@ prf-accident-severity-predictor/
 │
 ├── data/raw/              # CSVs da PRF: datatran{ano}.csv e pessoas{ano}.csv (ignorado no git)
 ├── models/                # Pipelines treinados (.joblib) e limiares (.json)
+├── reports/               # Gráficos gerados pelos scripts (SHAP)
 ├── notebooks/
 │   └── 01_eda_and_modeling.ipynb   # EDA, modelagem, robustez e experimento preventivo
 ├── src/
@@ -61,7 +62,9 @@ prf-accident-severity-predictor/
 │   ├── degradation.py              # Simulação de relato incompleto (omissão de veículos/pessoas)
 │   ├── robustness.py               # Teste de robustez do modelo ao relato incompleto
 │   ├── augmentation.py             # Compara treinar com e sem omissão simulada
-│   └── threshold_nan.py            # Limiar do modelo treinado com omissão
+│   ├── threshold_nan.py            # Limiar do modelo treinado com omissão
+│   ├── calibration.py              # Calibração das probabilidades (Platt e isotônica)
+│   └── explain.py                  # Interpretabilidade com valores SHAP
 ├── .gitignore
 ├── readme.md
 └── requirements.txt
@@ -128,6 +131,22 @@ O recall se mantém em cerca de 82% em qualquer nível de omissão, e um limiar 
 
 > **Ressalva:** a omissão é simulada, aleatória e igual no treino e no teste. Em ligações reais ela pode se correlacionar com a gravidade, e só relatos reais permitiriam medir isso.
 
+### Calibração das probabilidades
+
+Ranking e limiar só exigem que a ordem das ligações esteja certa; já mostrar "70% de chance de vítima grave" ao atendente exige que o número seja real. O XGBoost com `scale_pos_weight` **superestima**: no teste 2026 a probabilidade média prevista é 0.45 para uma taxa real de 0.28 (ECE 0.171; ligações que o modelo dá ~65% têm 42% de graves de fato). Um calibrador aprendido em 2025 (com omissão simulada, como no treino) corrige isso sem tocar no teste:
+
+| Versão (relato completo) | Brier | ECE | ROC-AUC | PR-AUC |
+| :--- | :---: | :---: | :---: | :---: |
+| Bruta | 0.194 | 0.171 | 0.765 | 0.589 |
+| Platt (sigmoide) | 0.162 | 0.008 | 0.765 | 0.589 |
+| Isotônica | 0.162 | 0.007 | 0.765 | 0.584 |
+
+A calibração é uma transformação monotônica, então o ranking e o limiar por recall não mudam. O Platt vale também em todos os níveis de omissão (ECE ≤ 0.008), sem ajustar por nível. Fica como recomendação o Platt (2 parâmetros, sem os empates da isotônica, que perde um pouco de PR-AUC).
+
+### Interpretabilidade (SHAP)
+
+`src/explain.py` calcula valores SHAP exatos (TreeSHAP nativo do XGBoost) no teste 2026 e soma as contribuições de volta à variável original. As mais influentes são o que o atendente relata: `n_moto` (0.49 de |SHAP| médio, em log-odds), `tipo_acidente` (0.45), `pessoas` (0.21) e `n_pesado` (0.18), seguidas de `municipio` (0.15). Quando o bloco de veículos é omitido, `n_moto` e `n_pesado` caem para ~0.07 e ~0.01 e o modelo passa a depender de `tipo_acidente` e da localização, coerente com a robustez medida acima. Ter moto envolvida soma +0.46 de log-odds contra -0.50 sem moto; `Incêndio` puxa a previsão para baixo (-4.3 a -4.9 nos casos de menor probabilidade).
+
 ### Experimento: abordagem preventiva (só variáveis pré-evento)
 
 Avaliado com a Regressão Logística:
@@ -175,6 +194,8 @@ python src/threshold.py   # escolhe o limiar de decisão do XGBoost
 python src/threshold_nan.py   # limiar do XGBoost treinado com omissão
 python src/robustness.py      # teste de robustez ao relato incompleto
 python src/augmentation.py    # compara treinar com e sem omissão simulada
+python src/calibration.py     # calibra as probabilidades do modelo aug-nan
+python src/explain.py         # valores SHAP (gráfico em reports/)
 ```
 
 ### 6. Executar o Notebook
