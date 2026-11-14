@@ -34,7 +34,7 @@ Limiar ajustado (`src/threshold.py`): escolhido sem tocar no teste (ajusta em 20
 
 **Calibração (feito, `src/calibration.py`):** o XGBoost bruto superestima (prob. média 0.45 contra 0.28 real; ECE 0.171, Brier 0.194). Platt e isotônica aprendidos na validação 2025 degradada levam o ECE a ~0.008 e o Brier a 0.162, sem mexer no ROC-AUC (monotônica), em todos os níveis de omissão. Preferir Platt (a isotônica perde ~0.005 de PR-AUC por empates). O calibrador é ajustado sobre o modelo de 2024 e salvo em `models/xgboost_nan_platt.joblib`; o modelo de produção (2024+2025) ainda não tem calibrador próprio (exigiria reservar período de validação). **Interpretabilidade (feito, `src/explain.py`):** TreeSHAP nativo (`pred_contribs`, sem a lib `shap`) agregado por variável original; top: `n_moto`, `tipo_acidente`, `pessoas`, `n_pesado`, `municipio`; gráfico em `reports/shap_importance.png`.
 
-README e notebook estão atualizados (o notebook tem também as seções 4.6 calibração e 5.1 SHAP) (o notebook tem as seções 4.2 geográficas, 4.3 veículos e pessoas, 4.4 limiar e 4.5 robustez ao relato incompleto).
+README e notebook estão atualizados (o notebook tem as seções 4.2 geográficas, 4.3 veículos e pessoas, 4.4 limiar, 4.5 robustez ao relato incompleto, 4.6 calibração e 5.1 SHAP).
 
 Próximos passos (calibração e SHAP já feitos):
 1. Multiclasse (leve, grave, fatal), se fizer sentido.
