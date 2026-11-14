@@ -21,7 +21,6 @@ Uso:
 from pathlib import Path
 
 import joblib
-import matplotlib
 import numpy as np
 import pandas as pd
 import xgboost as xgb
@@ -30,8 +29,7 @@ from data_preprocessing import PEOPLE_COLS, TRIAGE, load_dataset
 from degradation import hide_block_nan
 from train import MODELS_DIR, TEST_YEARS
 
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
+import matplotlib.pyplot as plt
 
 REPORTS_DIR = Path(__file__).resolve().parents[1] / "reports"
 N_SAMPLE = 20_000
