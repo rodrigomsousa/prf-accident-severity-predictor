@@ -1,0 +1,1 @@
+{"model": "xgboost_aug_nan", "fit_on": [2024, 2025], "method": "OOF 5-fold", "coef": 1.0457093129312116, "intercept": -0.9035885700161845}
