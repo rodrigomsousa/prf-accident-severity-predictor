@@ -24,7 +24,7 @@ Como experimento complementar, o notebook avalia uma **abordagem preventiva**: p
 
 ## 📊 Dataset & Dados Abertos
 
-Dados do portal de **Dados Abertos da PRF** (agrupados por ocorrência e por pessoa): 2024, 2025 e 2026 (até agosto), cerca de 194 mil acidentes e 524 mil pessoas envolvidas.
+Dados do portal de **Dados Abertos da PRF** (agrupados por ocorrência e por pessoa): 2024, 2025 e 2026 (até setembro), cerca de 200 mil acidentes e 524 mil pessoas envolvidas.
 
 * **Variável alvo (`grave`):** binária. Vale 1 se houve ao menos um **morto ou ferido grave** (~28% dos acidentes).
 * **Prevenção de *data leakage*:** as colunas que descrevem o desfecho (mortos, feridos, ilesos, `classificacao_acidente`) não são usadas como features. `causa_acidente` também fica de fora, porque é definida na investigação, depois do atendimento.
@@ -74,21 +74,21 @@ prf-accident-severity-predictor/
 
 ## 📈 Resultados e Desempenho
 
-Teste em **2026** (48.712 acidentes, 28% graves):
+Teste em **2026** (54.895 acidentes, jan–set, 28% graves):
 
 | Modelo | Acurácia | Precision | Recall | F1-Score | ROC-AUC | PR-AUC |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| Baseline (Dummy, sempre "leve") | 0.720 | 0.000 | 0.000 | 0.000 | 0.500 | 0.280 |
-| Triagem: Logistic Regression | 0.706 | 0.482 | 0.651 | 0.554 | 0.757 | 0.551 |
-| Triagem: Random Forest | 0.747 | 0.549 | 0.541 | 0.545 | 0.764 | 0.584 |
-| **Triagem: XGBoost** | 0.710 | 0.487 | 0.673 | 0.565 | **0.774** | **0.599** |
-| Triagem: XGBoost treinado com omissão (relato completo no teste) | 0.707 | 0.484 | 0.671 | 0.562 | 0.770 | 0.597 |
+| Baseline (Dummy, sempre "leve") | 0.721 | 0.000 | 0.000 | 0.000 | 0.500 | 0.279 |
+| Triagem: Logistic Regression | 0.705 | 0.479 | 0.647 | 0.550 | 0.756 | 0.549 |
+| Triagem: Random Forest | 0.746 | 0.546 | 0.539 | 0.542 | 0.764 | 0.581 |
+| **Triagem: XGBoost** | 0.710 | 0.486 | 0.671 | 0.563 | **0.773** | **0.596** |
+| Triagem: XGBoost treinado com omissão (relato completo no teste) | 0.708 | 0.483 | 0.670 | 0.561 | 0.770 | 0.594 |
 
-Precision, recall e F1 desta tabela usam o limiar padrão de 0.5. A última linha é o modelo preparado para relatos incompletos (veja a seção de robustez abaixo): com relato completo, perde só 0.002 de PR-AUC.
+Precision, recall e F1 desta tabela usam o limiar padrão de 0.5. A última linha é o modelo preparado para relatos incompletos (veja a seção de robustez abaixo): com relato completo, perde só 0.002 de PR-AUC. Com os meses de jul–set incluídos no teste, os números mal mudaram em relação ao corte até agosto (XGBoost 0.774 / 0.599 antes, 0.773 / 0.596 agora), o que indica estabilidade.
 
-**O que mais melhorou o modelo foram as features de veículos e pessoas** (quantas motos, bicicletas, caminhões e ônibus, e se há pedestre), agregadas dos arquivos da PRF por pessoa. Sem elas, os três algoritmos ficavam colados em ROC-AUC ≈ 0.72. O XGBoost foi de 0.721 / 0.539 para 0.774 / 0.599 (ROC-AUC / PR-AUC), com intervalo de 95% do ganho em PR-AUC entre +0.056 e +0.065 (bootstrap pareado no teste). Com isso, as árvores passaram a se separar do modelo linear. Apenas o `estado_fisico` e demais colunas de desfecho dos arquivos por pessoa ficam de fora.
+**O que mais melhorou o modelo foram as features de veículos e pessoas** (quantas motos, bicicletas, caminhões e ônibus, e se há pedestre), agregadas dos arquivos da PRF por pessoa. Sem elas, os três algoritmos ficavam colados em ROC-AUC ≈ 0.72. O XGBoost foi de 0.722 / 0.537 para 0.773 / 0.596 (ROC-AUC / PR-AUC), com intervalo de 95% do ganho em PR-AUC entre +0.055 e +0.064 (bootstrap pareado no teste). Com isso, as árvores passaram a se separar do modelo linear. Apenas o `estado_fisico` e demais colunas de desfecho dos arquivos por pessoa ficam de fora.
 
-As features geográficas (coordenadas e histórico de município e trecho) trouxeram um ganho menor, mas estatisticamente real: +0.005 de PR-AUC, com intervalo de 95% entre +0.003 e +0.008.
+As features geográficas (coordenadas e histórico de município e trecho) trouxeram um ganho menor, mas estatisticamente real: +0.005 de PR-AUC, com intervalo de 95% entre +0.003 e +0.007.
 
 > **Ressalva:** os arquivos por pessoa são o registro final da PRF. O modelo supõe que o atendente consegue saber na ligação se há moto ou pedestre. A seção de robustez abaixo mede o que acontece quando o relato é incompleto.
 
@@ -100,10 +100,10 @@ O limiar foi escolhido **sem olhar o teste**: o modelo treina em 2024, o limiar 
 
 | XGBoost no teste 2026 | Limiar | Recall | Precision | Acionamentos |
 | :--- | :---: | :---: | :---: | :---: |
-| Limiar padrão | 0.500 | 0.673 | 0.487 | 38.7% |
-| **Limiar ajustado** | **0.391** | **0.825** | **0.408** | **56.7%** |
+| Limiar padrão | 0.500 | 0.671 | 0.486 | 38.5% |
+| **Limiar ajustado** | **0.391** | **0.824** | **0.406** | **56.5%** |
 
-O recall de 82% em 2026 mostra que o limiar escolhido em 2025 se manteve. O custo ainda é alto: para pegar 4 de cada 5 acidentes graves, o resgate avançado seria acionado em 57% das ligações (eram 64% antes das features de veículos e pessoas), e cerca de 2 em cada 5 acionamentos são de fato graves (contra 28% se todas as ligações fossem atendidas).
+O recall de 82% em 2026 mostra que o limiar escolhido em 2025 se manteve (inclusive com os meses de jul–set, de maior movimento). O custo ainda é alto: para pegar 4 de cada 5 acidentes graves, o resgate avançado seria acionado em 57% das ligações (eram 64% antes das features de veículos e pessoas), e cerca de 2 em cada 5 acionamentos são de fato graves (contra 28% se todas as ligações fossem atendidas).
 
 ### Robustez ao relato incompleto
 
@@ -142,6 +142,28 @@ Ranking e limiar só exigem que a ordem das ligações esteja certa; já mostrar
 | Isotônica | 0.162 | 0.007 | 0.765 | 0.584 |
 
 A calibração é uma transformação monotônica, então o ranking e o limiar por recall não mudam. O Platt vale também em todos os níveis de omissão (ECE ≤ 0.008), sem ajustar por nível. Fica como recomendação o Platt (2 parâmetros, sem os empates da isotônica, que perde um pouco de PR-AUC).
+
+#### Calibrador do modelo de produção
+
+O calibrador acima foi ajustado sobre o modelo treinado só em 2024. O modelo de produção (2024 + 2025) não tem período de validação sobrando, então `src/calibration_prod.py` usa *cross-fitting*: previsões out-of-fold (5 folds) sobre 2024 + 2025, cada acidente previsto por um modelo que não o viu, e o Platt aprende sobre elas. No teste 2026 o ECE é 0.009 com relato completo e 0.005 sem nenhum relato (o Platt antigo dá 0.012 e 0.008), com Brier 0.160 a 0.172. Os dois são equivalentes na prática; o novo é o que acompanha o modelo salvo (`models/xgboost_nan_platt_prod.joblib`).
+
+### Desempenho por subgrupo
+
+O recall global de ~83% esconde diferenças grandes (`src/subgroups.py`, teste 2026, limiar único 0.389, IC 95% por bootstrap):
+
+| Subgrupo | Graves | Recall | Acionamentos |
+| :--- | :---: | :---: | :---: |
+| Atropelamento de pedestre / colisão frontal | 68% / 63% | 1.00 / 1.00 | 99% / 99% |
+| Pista simples | 33% | 0.90 | 70% |
+| Pista dupla | 23% | 0.75 | 48% |
+| Saída de leito carroçável | 22% | 0.59 | 38% |
+| Engavetamento | 12% | 0.59 | 22% |
+| DF (n = 804) | 19% | 0.51 | 28% |
+| SP | 18% | 0.60 | 30% |
+
+O padrão é a **prevalência**: onde graves são menos comuns, um limiar único de probabilidade pega menos deles (e aciona menos), e onde são comuns o modelo aciona quase sempre. Isso é coerente com um modelo calibrado e custo igual para todos os erros, mas significa que "recall de 80%" vale na média, não por tipo de acidente ou estado. Se a regra de negócio exigir recall mínimo por grupo (por exemplo, por UF), seria preciso limiares por grupo, ao custo de mais acionamentos nos grupos de baixa prevalência. Com 50% de omissão do relato o quadro é parecido (recall global 0.826; engavetamento cai para 0.54).
+
+> Os testes de subgrupo são muitos (79), então alguns "significativamente abaixo" aparecem por acaso; os padrões acima (tipo de acidente, tipo de pista, SP/RJ/RS/DF) são grandes e consistentes o bastante para não serem só ruído.
 
 ### Interpretabilidade (SHAP)
 
