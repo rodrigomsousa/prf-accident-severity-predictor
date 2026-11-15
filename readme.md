@@ -64,7 +64,17 @@ prf-accident-severity-predictor/
 │   ├── augmentation.py             # Compara treinar com e sem omissão simulada
 │   ├── threshold_nan.py            # Limiar do modelo treinado com omissão
 │   ├── calibration.py              # Calibração das probabilidades (Platt e isotônica)
+│   ├── calibration_prod.py         # Calibrador do modelo de produção (Platt OOF)
+│   ├── subgroups.py                # Recall/precision por subgrupo
+│   ├── group_threshold.py          # Limiares por grupo vs limiar único
+│   ├── cost_analysis.py            # Limiar ótimo por custo e custo implícito do limiar atual
+│   ├── drift.py                    # Avaliação rolante mês a mês (congelado vs retreinado)
+│   ├── informative_omission.py     # Omissão do relato que depende da ocorrência
 │   └── explain.py                  # Interpretabilidade com valores SHAP
+├── app/
+│   └── streamlit_app.py            # Demo: probabilidade, decisão e SHAP de uma ocorrência
+├── tests/                          # Testes (leakage, degradação, pipeline, modelo de produção)
+├── pytest.ini
 ├── .gitignore
 ├── readme.md
 └── requirements.txt
@@ -165,6 +175,62 @@ O padrão é a **prevalência**: onde graves são menos comuns, um limiar único
 
 > Os testes de subgrupo são muitos (79), então alguns "significativamente abaixo" aparecem por acaso; os padrões acima (tipo de acidente, tipo de pista, SP/RJ/RS/DF) são grandes e consistentes o bastante para não serem só ruído.
 
+#### Limiares por grupo
+
+`src/group_threshold.py` escolhe um limiar *por grupo* (recall ≥ 80% dentro de cada tipo de acidente ou UF) na validação 2025, sem tocar no teste. Grupos com menos de 500 acidentes ou 100 graves na validação herdam o limiar global, porque o limiar de um grupo pequeno é só ruído. No teste 2026, com relato completo:
+
+| Limiares | Recall | Precision | Acionamentos | Pior recall de um grupo | Grupos com recall < 70% |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| Único (0.389) | 0.831 | 0.401 | 57.9% | 0.51 (UF) / 0.59 (tipo) | 4 de 23 UFs / 4 de 13 tipos |
+| Por UF | 0.834 | 0.389 | 59.7% | **0.76** | 0 |
+| Por tipo de acidente | 0.821 | 0.374 | 61.2% | **0.75** | 0 |
+
+Uniformizar a cobertura é **barato**: o pior recall sobe de ~0.5 para ~0.75 por UF ao custo de +1.8 ponto de acionamento. Faz sentido, porque os grupos descobertos são os de baixa prevalência, que têm poucas ligações; elevar o recall neles quase não pesa no total. Com 50% de omissão do relato o resultado é igual (pior recall ~0.75, +2 a +6 pontos de acionamento). Se a operação exigir cobertura uniforme, essa é a opção; se o objetivo é só o recall médio, o limiar único basta.
+
+### Do limiar por recall ao limiar por custo
+
+"Recall de 80%" é uma meta, não uma conta. Com a probabilidade calibrada, a decisão que minimiza o custo é acionar quando `p ≥ 1 / (1 + r)`, em que `r = C_fn / C_fp` é quanto custa perder um grave em relação a um acionamento desnecessário. `src/cost_analysis.py` mostra isso no teste 2026 (custo por ligação em unidades de `C_fp`):
+
+| r | Limiar ótimo | Recall | Acionamentos | Custo (limiar ótimo) | Custo (recall 80%) | Nunca aciona | Sempre aciona |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| 2 | 0.333 | 0.59 | 31% | 0.377 | 0.441 | 0.558 | 0.721 |
+| 5 | 0.167 | 0.89 | 58% | 0.583 | 0.583 | 1.395 | 0.721 |
+| 10 | 0.091 | 0.98 | 67% | 0.818 | 0.818 | 2.789 | 0.721 |
+
+(O limiar do recall 80%, 0.389 bruto, equivale a 0.202 calibrado, que é o ótimo para **r ≈ 4**.) Ou seja, a meta de 80% equivale a dizer que perder um grave custa cerca de 4 envios desnecessários. Se a PRF julgar que perder um grave é mais caro que isso, o limiar certo é menor e o recall maior (r = 10 pede recall 0.98, acionando 2 em cada 3 ligações); se julgar menos, o limiar sobe. O modelo calibrado permite transformar essa decisão de negócio em limiar, em vez de escolher um recall por palpite. A calibração entra aqui: sem ela, `1 / (1 + r)` não valeria.
+
+### Drift temporal
+
+O modelo envelhece? `src/drift.py` faz uma avaliação rolante de jan/2025 a set/2026. Em cada mês compara um modelo **congelado** (treinado só em 2024) com um **retreinado** com todos os meses anteriores, no mesmo mês e com o limiar fixo de 0.389:
+
+| | 1º semestre 2025 | Últimos 6 meses (abr–set 2026) |
+| :--- | :---: | :---: |
+| Ganho de PR-AUC do retreino sobre o congelado | +0.002 | +0.010 |
+
+- **O envelhecimento existe, mas é lento e pequeno.** O ganho do retreino cresce com a idade do modelo (de +0.002 aos poucos meses para +0.010 com 2 anos), e o PR-AUC mensal varia ±0.03 por dificuldade do mês, bem mais que isso.
+- **O recall se mantém perto de 80%** sem reajustar o limiar: o congelado oscila entre 0.79 e 0.83 (média 0.81) e o retreinado entre 0.80 e 0.83 (média 0.82). Cada mês tem ~1.7 mil graves, então ±0.01 já é ruído de amostragem.
+- Em 2026 o modelo de produção (2024 + 2025) fica praticamente igual ao retreinado todo mês (PR-AUC 0.572 a 0.622 contra 0.576 a 0.625).
+- **Conclusão prática:** retreinar uma vez por ano parece suficiente; vale monitorar o recall mensal e retreinar se ele ficar abaixo de ~0.78.
+
+> Os meses de 2025 não são totalmente fora da amostra para o limiar, que foi escolhido em 2025. Os meses de 2026 são.
+
+### Omissão não aleatória
+
+A ressalva mais forte do projeto é que a omissão do relato foi simulada como aleatória. `src/informative_omission.py` testa o modelo de produção em 2026 com omissão que **depende da ocorrência**, comparando com omissão aleatória de mesma taxa média (limiar 0.389, média de 10 sorteios):
+
+| Cenário (omissão ~50%) | Recall | Acionamentos | PR-AUC | Δ PR-AUC vs aleatória |
+| :--- | :---: | :---: | :---: | :---: |
+| Aleatória (referência) | 0.827 | 60.8% | 0.566 | – |
+| Graves omitem mais (80% vs 38%) | 0.823 | 60.0% | 0.541 | -0.024 |
+| Graves omitem menos (20% vs 62%) | 0.829 | 61.6% | 0.589 | +0.023 |
+| Noite omite mais (80% vs 20%) | 0.833 | 61.3% | 0.564 | -0.005 |
+| 3+ veículos omitem mais | 0.829 | 61.0% | 0.563 | -0.004 |
+| **Adversário: moto ou pedestre omitem mais (80% vs 30%)** | **0.794** | **55.9%** | 0.562 | -0.001 |
+
+- **O recall resiste quando a omissão depende da gravidade, da hora ou do nº de veículos** (0.82 a 0.83). Quando a omissão depende só do desfecho, o recall por classe não muda por construção; o que muda é a precision e a PR-AUC (±0.024): se os graves são os que mais omitem, o modelo fica mais cego, e o contrário o favorece.
+- **O pior caso é a omissão ligada ao próprio conteúdo do bloco**: se o relato some justamente quando há moto ou pedestre, o recall cai de 0.83 para 0.79 (para 0.76 nos graves que informaram, porque o modelo "aprende" a ler o relato presente como sinal de caso leve). A queda é de 3 pontos, não um colapso, graças ao treino com `NaN`.
+- Continua sendo simulação: as regras de omissão são inventadas. Só relatos reais de ligações diriam qual desses cenários se aproxima da realidade.
+
 ### Interpretabilidade (SHAP)
 
 `src/explain.py` calcula valores SHAP exatos (TreeSHAP nativo do XGBoost) no teste 2026 e soma as contribuições de volta à variável original. As mais influentes são o que o atendente relata: `n_moto` (0.49 de |SHAP| médio, em log-odds), `tipo_acidente` (0.45), `pessoas` (0.21) e `n_pesado` (0.18), seguidas de `municipio` (0.15). Quando o bloco de veículos é omitido, `n_moto` e `n_pesado` caem para ~0.07 e ~0.01 e o modelo passa a depender de `tipo_acidente` e da localização, coerente com a robustez medida acima. Ter moto envolvida soma +0.46 de log-odds contra -0.50 sem moto; `Incêndio` puxa a previsão para baixo (-4.3 a -4.9 nos casos de menor probabilidade).
@@ -217,8 +283,22 @@ python src/threshold_nan.py   # limiar do XGBoost treinado com omissão
 python src/robustness.py      # teste de robustez ao relato incompleto
 python src/augmentation.py    # compara treinar com e sem omissão simulada
 python src/calibration.py     # calibra as probabilidades do modelo aug-nan
+python src/calibration_prod.py  # calibrador do modelo de produção
+python src/subgroups.py       # recall por subgrupo
+python src/group_threshold.py # limiares por grupo
+python src/cost_analysis.py   # limiar por custo
+python src/drift.py           # drift temporal, mês a mês (leva alguns minutos)
+python src/informative_omission.py  # omissão não aleatória
 python src/explain.py         # valores SHAP (gráfico em reports/)
 ```
+
+### Demo e testes
+```bash
+streamlit run app/streamlit_app.py   # demo: descreva a ocorrência e veja probabilidade, decisão e SHAP
+pytest                                # testes (os de modelo de produção são pulados sem data/ e models/)
+```
+
+A demo usa o modelo `aug-nan`, o Platt de produção e o limiar de recall 80%. Se o solicitante não informou os veículos, desmarque a caixa correspondente: o bloco vira `NaN` e a previsão usa só tipo de acidente e contexto.
 
 ### 6. Executar o Notebook
 ```bash

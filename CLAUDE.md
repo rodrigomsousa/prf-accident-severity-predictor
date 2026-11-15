@@ -38,10 +38,16 @@ Limiar ajustado (`src/threshold.py`): escolhido sem tocar no teste (ajusta em 20
 
 README atualizado (tabelas principais, calibração de produção e subgrupos); o notebook **ainda não** reflete o corte até setembro, a calibração de produção nem os subgrupos. README e notebook estavam atualizados (o notebook tem as seções 4.2 geográficas, 4.3 veículos e pessoas, 4.4 limiar, 4.5 robustez ao relato incompleto, 4.6 calibração e 5.1 SHAP).
 
-Próximos passos (calibração e SHAP já feitos):
-1. Multiclasse (leve, grave, fatal), se fizer sentido.
-2. Outras informações que o atendente pode perguntar (veículo preso nas ferragens, carga perigosa), se houver dados que as aproximem.
-3. Validar a hipótese de omissão aleatória com relatos reais das ligações, se houver acesso a eles.
+**Limiares por grupo (feito, `src/group_threshold.py`):** escolhidos na validação 2025 (recall >= 80% dentro do grupo; grupos com < 500 acidentes ou < 100 graves herdam o global). No teste 2026 o pior recall de um grupo sobe de 0.51 (UF) / 0.59 (tipo) para ~0.76 / 0.75 ao custo de +1.8 / +3.3 pontos de acionamento, porque os grupos descobertos são os de baixa prevalência. **Análise de custo (feito, `src/cost_analysis.py`):** com probabilidade calibrada, o limiar ótimo é 1/(1+r), r = C_fn/C_fp; o limiar de recall 80% (0.202 calibrado) equivale a r ~ 4. **Demo:** `app/streamlit_app.py` (probabilidade calibrada, decisão e SHAP; desmarcar "informou os veículos" manda `NaN`). **Testes:** `pytest` (tests/: leakage dos conjuntos de features, degradação/aug-nan, agregação por pessoa, contrato do pipeline com `NaN` e cross-fitting do TargetEncoder, Platt/limiar, smoke do modelo de produção no teste 2026, pulado sem data/ e models/). O notebook **ainda não** tem seções para limiares por grupo, custo, demo e testes.
+
+**Drift temporal (feito, `src/drift.py`):** avaliação rolante mês a mês (jan/2025 a set/2026), congelado (2024) vs retreinado (janela crescente), limiar fixo 0.389. Ganho de PR-AUC do retreino: +0.002 (1º sem. 2025) e +0.010 (últimos 6 meses); recall mensal fica em 0.79-0.83 sem reajustar. Retreino anual parece suficiente; monitorar recall mensal (< ~0.78 => retreinar). Os meses de 2025 não são totalmente OOS para o limiar (escolhido em 2025). **Omissão não aleatória (feito, `src/informative_omission.py`):** com omissão dependente de gravidade/hora/nº de veículos, o recall do modelo de produção segue 0.82-0.83 (PR-AUC ±0.024); no cenário adversário (moto/pedestre omitem mais) o recall cai para 0.79 (0.76 nos graves informados). Segue sendo simulação.
+
+Próximos passos (calibração, SHAP, subgrupos, limiares por grupo, custo, demo, testes, drift e omissão informativa já feitos):
+1. Decidir com a operação o `r` (custo de perder um grave) e se a cobertura deve ser uniforme por grupo; isso define o limiar final.
+2. Multiclasse (leve, grave, fatal), se fizer sentido.
+3. Outras informações que o atendente pode perguntar (veículo preso nas ferragens, carga perigosa), se houver dados que as aproximem.
+4. Validar a hipótese de omissão com relatos reais das ligações, se houver acesso a eles.
+5. Notebook: seções para limiares por grupo, custo, drift e omissão informativa (exige reexecutar, ~10 min).
 
 ## Comandos
 
@@ -54,6 +60,12 @@ venv/Scripts/python src/calibration.py              # calibração (Platt/isotô
 venv/Scripts/python src/explain.py                  # SHAP do aug-nan (gráfico em reports/)
 venv/Scripts/python src/calibration_prod.py       # calibrador Platt OOF do modelo de produção
 venv/Scripts/python src/subgroups.py [omissao]      # recall/precision por subgrupo no teste (data/subgroup_results.csv)
+venv/Scripts/python src/group_threshold.py        # limiares por grupo vs único
+venv/Scripts/python src/cost_analysis.py            # limiar por custo (r = C_fn/C_fp)
+venv/Scripts/python src/drift.py                    # drift temporal mês a mês (data/drift_results.csv)
+venv/Scripts/python src/informative_omission.py     # omissão do relato dependente da ocorrência
+venv/Scripts/streamlit run app/streamlit_app.py     # demo
+venv/Scripts/python -m pytest                       # testes
 venv/Scripts/python src/augmentation.py             # completo vs aug-zero vs aug-nan sob omissão (data/augmentation_results.csv)
 cd notebooks && ../venv/Scripts/jupyter nbconvert --to notebook --execute --inplace 01_eda_and_modeling.ipynb
 ```
