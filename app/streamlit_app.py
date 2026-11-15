@@ -28,7 +28,7 @@ from data_preprocessing import PEOPLE_COLS, TRACADO_TOKENS, TRIAGE, build_featur
 from explain import shap_by_variable
 
 MODELS = ROOT / "models"
-PEOPLE_LABELS = {"n_moto": "Motos", "n_bicicleta": "Bicicletas", "n_pesado": "Caminhões/tratores",
+PEOPLE_LABELS = {"n_moto": "Motos", "n_bicicleta": "Bicicletas", "n_pesado": "Pesados",
                  "n_onibus": "Ônibus"}
 FEATURE_LABELS = {
     "tipo_acidente": "tipo de acidente", "pessoas": "nº de pessoas", "veiculos": "nº de veículos",
@@ -54,6 +54,12 @@ def options(feats: pd.DataFrame, col: str) -> list[str]:
     return sorted(feats[col].dropna().unique())
 
 
+def pick(container, label: str, feats: pd.DataFrame, col: str, **kw):
+    """Selectbox com as categorias em ordem alfabética e a mais frequente como padrão."""
+    opts = options(feats, col)
+    return container.selectbox(label, opts, index=opts.index(feats[col].mode()[0]), **kw)
+
+
 def typical_coords(feats: pd.DataFrame, trecho: str, municipio: str) -> tuple[float, float]:
     """Coordenadas medianas do trecho; se nunca visto, do município; senão NaN."""
     for col, key in [("trecho", trecho), ("municipio", municipio)]:
@@ -75,31 +81,31 @@ def main() -> None:
     with left:
         st.subheader("Ocorrência")
         c1, c2, c3 = st.columns(3)
-        uf = c1.selectbox("UF", options(feats, "uf"), index=options(feats, "uf").index("SP"))
-        brs = sorted(feats.loc[feats["uf"] == uf, "br"].unique())
+        uf = pick(c1, "UF", feats, "uf")
+        brs = list(feats.loc[feats["uf"] == uf, "br"].value_counts().index)  # mais frequente primeiro
         br = c2.selectbox("Rodovia (BR)", brs)
         km = c3.number_input("Km", min_value=0.0, max_value=5000.0, value=100.0, step=1.0)
         in_uf = feats[(feats["uf"] == uf) & (feats["br"] == br)]
-        municipios = sorted(in_uf["municipio"].unique()) or options(feats, "municipio")
+        municipios = list(in_uf["municipio"].value_counts().index) or options(feats, "municipio")
         municipio = st.selectbox("Município", municipios,
                                  format_func=lambda m: m.split("_", 1)[1].title())
 
         c1, c2, c3, c4 = st.columns(4)
         hora = c1.selectbox("Hora", [f"{h:02d}" for h in range(24)], index=18)
-        dia = c2.selectbox("Dia da semana", options(feats, "dia_semana"))
+        dia = pick(c2, "Dia da semana", feats, "dia_semana")
         mes = c3.selectbox("Mês", [str(m) for m in range(1, 13)], index=10)
-        fase = c4.selectbox("Fase do dia", options(feats, "fase_dia"))
+        fase = pick(c4, "Fase do dia", feats, "fase_dia")
 
         c1, c2 = st.columns(2)
-        clima = c1.selectbox("Condição meteorológica", options(feats, "condicao_metereologica"))
-        pista = c2.selectbox("Tipo de pista", options(feats, "tipo_pista"))
+        clima = pick(c1, "Condição meteorológica", feats, "condicao_metereologica")
+        pista = pick(c2, "Tipo de pista", feats, "tipo_pista")
         c1, c2 = st.columns(2)
-        sentido = c1.selectbox("Sentido da via", options(feats, "sentido_via"))
-        uso = c2.selectbox("Área", options(feats, "uso_solo"))
+        sentido = pick(c1, "Sentido da via", feats, "sentido_via")
+        uso = pick(c2, "Área", feats, "uso_solo")
         tracado = st.multiselect("Traçado da via", TRACADO_TOKENS, default=["Reta"])
 
         st.subheader("Relato do solicitante")
-        tipo = st.selectbox("Tipo de acidente", options(feats, "tipo_acidente"))
+        tipo = pick(st, "Tipo de acidente", feats, "tipo_acidente")
         c1, c2 = st.columns(2)
         veiculos = c1.number_input("Veículos envolvidos", 0, 30, 2)
         pessoas = c2.number_input("Pessoas envolvidas", 0, 100, 3)

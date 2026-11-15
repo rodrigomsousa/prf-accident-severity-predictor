@@ -194,10 +194,10 @@ Uniformizar a cobertura é **barato**: o pior recall sobe de ~0.5 para ~0.75 por
 | r | Limiar ótimo | Recall | Acionamentos | Custo (limiar ótimo) | Custo (recall 80%) | Nunca aciona | Sempre aciona |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | 2 | 0.333 | 0.59 | 31% | 0.377 | 0.441 | 0.558 | 0.721 |
-| 5 | 0.167 | 0.89 | 58% | 0.583 | 0.583 | 1.395 | 0.721 |
-| 10 | 0.091 | 0.98 | 67% | 0.818 | 0.818 | 2.789 | 0.721 |
+| 5 | 0.167 | 0.89 | 67% | 0.576 | 0.583 | 1.395 | 0.721 |
+| 10 | 0.091 | 0.98 | 88% | 0.665 | 0.818 | 2.789 | 0.721 |
 
-(O limiar do recall 80%, 0.389 bruto, equivale a 0.202 calibrado, que é o ótimo para **r ≈ 4**.) Ou seja, a meta de 80% equivale a dizer que perder um grave custa cerca de 4 envios desnecessários. Se a PRF julgar que perder um grave é mais caro que isso, o limiar certo é menor e o recall maior (r = 10 pede recall 0.98, acionando 2 em cada 3 ligações); se julgar menos, o limiar sobe. O modelo calibrado permite transformar essa decisão de negócio em limiar, em vez de escolher um recall por palpite. A calibração entra aqui: sem ela, `1 / (1 + r)` não valeria.
+(O limiar do recall 80%, 0.389 bruto, equivale a 0.202 calibrado, que é o ótimo para **r ≈ 4**.) Ou seja, a meta de 80% equivale a dizer que perder um grave custa cerca de 4 envios desnecessários. Se a PRF julgar que perder um grave é mais caro que isso, o limiar certo é menor e o recall maior (r = 10 pede recall 0.98, acionando 88% das ligações, com custo 0.67 contra 0.82 do limiar de recall 80%); se julgar menos, o limiar sobe. O modelo calibrado permite transformar essa decisão de negócio em limiar, em vez de escolher um recall por palpite. A calibração entra aqui: sem ela, `1 / (1 + r)` não valeria.
 
 ### Drift temporal
 
